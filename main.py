@@ -69,7 +69,7 @@ indices = numpy.array([[]])
 
 def train(inputData, outputData):
     global weightsMatrix1, weightsMatrix2, lossArray, indices
-    for i in range(100):
+    for i in range(10):
         for inputBatch, outputBatch in zip(inputData, outputData):
             hiddenValues = inputBatch.dot(weightsMatrix1)
 
@@ -101,6 +101,7 @@ def train(inputData, outputData):
 
         lossArray = numpy.append(lossArray, lossFunction)
         indices = numpy.append(indices, i)
+
 
 def testModel(inputData, outputData):
     global weightsMatrix1, weightsMatrix2, lossArray, indices
@@ -165,7 +166,7 @@ def predict():
     
 #testModel(testingInputData, testingOutputData)
 
-predict()
+#predict()
 
 plt.plot(indices, lossArray)
 plt.legend(['Loss over iterations'])
