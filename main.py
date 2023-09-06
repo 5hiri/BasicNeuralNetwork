@@ -1,48 +1,208 @@
-import numpy
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+import pygame
+import sys
+import random, time
 
-# Parameters for our network
+# Initialize pygame
+pygame.init()
 
-inputNodes = 2
-outputNodes = 2
-hiddenNodes = 3
-batchSize = 8 # how much data we want to put through the network at one time
+# Game constants
+SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+BG_COLOR = (0, 0, 0)
 
-inputData = numpy.random.randn(batchSize, inputNodes)
-outputData = numpy.random.randn(batchSize, outputNodes)
+PREY_COLOR = (50, 0, 255)
+PREY_SPEED = 5
 
-weightsMatrix1 = numpy.random.randn(inputNodes, hiddenNodes)
-weightsMatrix2 = numpy.random.randn(hiddenNodes, outputNodes)
+PREDATOR_COLOR = (100, 0, 20)
+PREDATOR_SPEED = 3
 
-lossArray = numpy.array([[]])
-indices = numpy.array([[]])
+# Create the game window
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Simulation Game")
 
-for i in range(10000):
-    hiddenValues = inputData.dot(weightsMatrix1)
+# Create prey entity
+prey_size = 10
+prey_stamina = 100
+prey_penalty = 0
+prey_reward = 0
+prey_x = random.randint(15, SCREEN_WIDTH - 15)
+prey_y = random.randint(15, SCREEN_HEIGHT - 15)
 
-    # Rectified Linear Unit (ReLU)
-    # renives akk begatuve vakyes, replacing with 0
+# create predator entity
+predator_size = 15
+predator_stamina = 100
+predator_penalty = 0
+predator_reward = 0
+predator_x = random.randint(15, SCREEN_WIDTH - 15)
+predator_y = random.randint(15, SCREEN_HEIGHT - 15)
 
-    hiddenRelu = numpy.maximum(hiddenValues, 0)
-    outputDataPredictions = hiddenRelu.dot(weightsMatrix2)
-    lossFunction = numpy.square(outputDataPredictions - outputData).sum()
-    lossArray = numpy.append(lossArray, lossFunction)
-    indices = numpy.append(indices, i)
+# Initialize time variables for player inactivity and entity spawning
+last_movement_time = time.time()
+inactive_time_threshold = 5  # 5 seconds
+spawned_entities = []
 
-    #Back propogation
-    gradientPrediction = 2 * (outputDataPredictions - outputData)
-    gradientWeights2 =  hiddenRelu.T.dot(gradientPrediction)
-    gradientHiddenRelu = gradientPrediction.dot(weightsMatrix2.T)
-    gradientHiddenValues = gradientHiddenRelu.copy()
-    gradientHiddenValues[hiddenValues < 0] = 0
-    gradientWeights1 = inputData.T.dot(gradientHiddenValues)
-    weightsMatrix1 = weightsMatrix1 - gradientWeights1 * 1e-4
+# Game loop
+running = True
+clock = pygame.time.Clock()
+
+# Dangerous entity properties
+dangerous_radius = 10
+dangerous_x = random.randint(dangerous_radius, SCREEN_WIDTH - dangerous_radius)
+dangerous_y = random.randint(dangerous_radius, SCREEN_HEIGHT - dangerous_radius)
+DANGEROUS_COLOR = (255, 0, 0)
+
+tick = 0
+
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+    tick = tick + 1
+
+    #time penalty for predator
+    if tick > 60:
+        predator_penalty = predator_penalty + (1 / (tick / 60))
+
+    #time reward for prey
+    if tick > 60:
+        prey_reward = prey_reward + (1 / (tick / 60))
+
+    # Handle prey movement
+    keys = pygame.key.get_pressed()
+    if prey_stamina > 0:
+        if keys[pygame.K_w]:
+            prey_y -= PREY_SPEED
+        if keys[pygame.K_s]:
+            prey_y += PREY_SPEED
+        if keys[pygame.K_a]:
+            prey_x -= PREY_SPEED
+        if keys[pygame.K_d]:
+            prey_x += PREY_SPEED
+    
+    # handle predator movement
+    if predator_stamina > 0:
+        if keys[pygame.K_UP]:
+            predator_y -= PREDATOR_SPEED
+        if keys[pygame.K_DOWN]:
+            predator_y += PREDATOR_SPEED
+        if keys[pygame.K_LEFT]:
+            predator_x -= PREDATOR_SPEED
+        if keys[pygame.K_RIGHT]:
+            predator_x += PREDATOR_SPEED
+    
+    # Check for player movement
+    prey_has_moved = False
+    predator_has_moved = False
+    keys = pygame.key.get_pressed()
+    #prey
+    if keys[pygame.K_w] or keys[pygame.K_a] or keys[pygame.K_s] or keys[pygame.K_d]:
+        if prey_stamina > 0:
+            prey_stamina = prey_stamina - 1
+        prey_has_moved = True
+    #predator
+    if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
+        if predator_stamina > 0:
+            predator_stamina = predator_stamina - 1
+        predator_has_moved = True
+
+    if prey_has_moved == False:
+        if prey_stamina < 100:
+            prey_stamina = prey_stamina + 1
+    if predator_has_moved == False:
+        if predator_stamina < 100:
+            predator_stamina = predator_stamina + 1
+
+    #keeps prey inside game window
+    prey_x = max(prey_size, min(prey_x, SCREEN_WIDTH - prey_size))
+    prey_y = max(prey_size, min(prey_y, SCREEN_HEIGHT - prey_size))
+
+    #keeps predator inside game window
+    predator_x = max(predator_size, min(predator_x, SCREEN_WIDTH - predator_size))
+    predator_y = max(predator_size, min(predator_y, SCREEN_HEIGHT - predator_size))
+
+    # Check for collisions
+    prey_to_dangerous_distance = ((prey_x - dangerous_x) ** 2 + (prey_y - dangerous_y) ** 2) ** 0.5
+    if prey_to_dangerous_distance < prey_size + dangerous_radius:
+        prey_penalty = prey_penalty + (1000 / (tick / 60))
+        running = False  # End the game if collision occurs
+    
+    #check collision between predator and prey
+    prey_to_predator_distance = ((prey_x - predator_x) ** 2 + (prey_y - predator_y) ** 2) ** 0.5
+    if prey_to_predator_distance < prey_size + predator_size:
+        predator_reward = predator_reward + (1000 / (tick / 60))
+        prey_penalty = prey_penalty + (1000 / (tick / 60))
+
+    # Check for inactivity and spawn new entity
+    # if not has_moved and time.time() - last_movement_time >= inactive_time_threshold:
+    #     new_entity = {
+    #         'x': random.randint(max(prey_x - 50, 0), min(prey_x + 50, SCREEN_WIDTH)),
+    #         'y': random.randint(max(prey_y - 50, 0), min(prey_y + 50, SCREEN_HEIGHT)),
+    #         'radius': dangerous_radius,
+    #         'color': (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)),
+    #         'spawned': True
+    #     }
+    #     spawned_entities.append(new_entity)
+
+    # Update screen
+    screen.fill(BG_COLOR)
+
+    # Draw and update existing entities
+    for entity in spawned_entities:
+        pygame.draw.circle(screen, entity['color'], (entity['x'], entity['y']), entity['radius'])
 
 
-plt.plot(indices, lossArray)
-plt.legend(['Loss over iterations'])
-plt.show()
+    # Draw dangerous entity
+    pygame.draw.circle(screen, DANGEROUS_COLOR, (dangerous_x, dangerous_y), dangerous_radius)
 
-print(outputData)
-print(outputDataPredictions)
+    # Draw prey
+    pygame.draw.circle(screen, PREY_COLOR, (prey_x, prey_y), prey_size)
+
+    # draw predator
+    pygame.draw.circle(screen, PREDATOR_COLOR, (predator_x, predator_y), predator_size)
+
+    #hud
+    #predator
+    black = (0, 0, 0)
+    white = (255, 255, 255)
+    font = pygame.font.Font(None, 36)
+    predator_stamina_text = f'Predator Stamina: {predator_stamina}'
+    predator_text_surface = font.render(predator_stamina_text, True, white)
+    predator_text_rect = predator_text_surface.get_rect()
+    predator_text_rect.midleft = (10, SCREEN_HEIGHT - 80)
+    #clock
+    clock_text = f'Clock: {tick // 60}'
+    clock_text_surface = font.render(clock_text, True, white)
+    clock_text_rect = clock_text_surface.get_rect()
+    clock_text_rect.midleft = (10, SCREEN_HEIGHT - 110)
+    #prey
+    prey_stamina_text = f'Prey Stamina: {prey_stamina}'
+    prey_text_surface = font.render(prey_stamina_text, True, white)
+    prey_text_rect = prey_text_surface.get_rect()
+    prey_text_rect.midleft = (10, SCREEN_HEIGHT - 50)
+    #prey reward/penalty
+    prey_reward_text = f'Prey Reward/Penaly: {int(prey_reward)} / {int(prey_penalty)}'
+    prey_reward_text_surface = font.render(prey_reward_text, True, white)
+    prey_reward_text_rect = prey_reward_text_surface.get_rect()
+    prey_reward_text_rect.midleft = (10, SCREEN_HEIGHT - 140)
+    #predator reward/penalty
+    predator_reward_text = f'Predator Reward/Penaly: {int(predator_reward)} / {int(predator_penalty)}'
+    predator_reward_text_surface = font.render(predator_reward_text, True, white)
+    predator_reward_text_rect = predator_reward_text_surface.get_rect()
+    predator_reward_text_rect.midleft = (10, SCREEN_HEIGHT - 170)
+    # Blit the text surface onto the screen
+    screen.blit(prey_text_surface, prey_text_rect)
+    screen.blit(predator_text_surface, predator_text_rect)
+    screen.blit(clock_text_surface, clock_text_rect)
+    screen.blit(prey_reward_text_surface, prey_reward_text_rect)
+    screen.blit(predator_reward_text_surface, predator_reward_text_rect)
+
+
+
+
+    pygame.display.flip()
+
+    clock.tick(60)
+
+# Clean up
+pygame.quit()
+sys.exit()
